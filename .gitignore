@@ -1,0 +1,13 @@
+.env
+sandbox/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+analysis_report.md
+analysis_report*.md
+*.log
+chroma_db/

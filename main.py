@@ -1,0 +1,56 @@
+import argparse
+import asyncio
+import importlib.util
+from pathlib import Path
+
+from model_api import ModelAPI
+from gigachat_api import GigaChatAPI
+from groq_api import GroqAPI
+
+
+def _load_agent_class():
+    """Загружает Agent из agent.py, обходя конфликт с пакетом agent/."""
+    agent_path = Path(__file__).with_name("agent.py")
+    spec = importlib.util.spec_from_file_location("agent_module", agent_path)
+    if spec is None or spec.loader is None:
+        raise ImportError("Не удалось загрузить module agent.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.Agent
+
+
+def main():
+    """Парсит аргументы и запускает анализ репозитория."""
+    parser = argparse.ArgumentParser(description="AI-Agent: анализ кода из Git-репозитория")
+    parser.add_argument("git_url", help="URL Git-репозитория для анализа")
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="analysis_report.md",
+        help="Путь для сохранения Markdown-отчета",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=["openai", "gigachat", "groq"],
+        default="openai",
+        help="Провайдер LLM (openai или gigachat)",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Имя модели провайдера (например, gpt-4 или GigaChat)",
+    )
+    args = parser.parse_args()
+    Agent = _load_agent_class()
+    if args.provider == "gigachat":
+        model = GigaChatAPI(model_name=args.model or "GigaChat")
+    elif args.provider == "groq":
+        model = GroqAPI(model_name=args.model or "llama-3.1-8b-instant")
+    else:
+        model = ModelAPI(model_name=args.model or "gpt-4")
+    agent = Agent(model=model)
+    asyncio.run(agent.run_from_git(args.git_url, output_file=args.output))
+
+
+if __name__ == "__main__":
+    main()
