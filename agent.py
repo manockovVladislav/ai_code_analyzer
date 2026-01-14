@@ -36,6 +36,33 @@ class Agent:
         finally:
             loader.cleanup()
 
+    async def run_from_path(self, local_path: str, output_file: str = "analysis_report.md"):
+        """Анализирует локальный проект, уже размещенный в sandbox."""
+        loader = ProjectLoader()
+        path = loader.use_local_project(local_path)
+        try:
+            files = self._collect_files(path)
+            print(f"[agent] Файлов для анализа: {len(files)}")
+            plan_text = await self.model.get_plan(files)
+            if plan_text:
+                print("[agent] План анализа:")
+                print(plan_text)
+            analysis_results = {}
+            action_log = []
+            for file_path in files:
+                print(f"[agent] Анализ файла: {file_path}")
+                steps, result = await self._run_file_actions(file_path)
+                analysis_results[file_path] = result
+                action_log.extend(steps)
+            reflection = await self.model.reflect(plan_text or "", action_log)
+            report_md = reporter.generate_report(analysis_results, reflection=reflection)
+            reporter.save_report(report_md, output_file)
+            reporter.print_report_console(report_md)
+            print(f"\nОтчет сохранен в файл: {output_file}")
+        finally:
+            # Не очищаем локальный путь, только при явном клоне
+            pass
+
     async def _analyze_file(self, file_path: str):
         """Считывает файл и отправляет код в модель для анализа."""
         try:

@@ -69,13 +69,25 @@ export GROQ_BASE_URL="https://api.groq.com/openai/v1/chat/completions"
 ## Запуск
 
 ```bash
-python main.py <git_repo_url>
+python main.py [git_repo_url_or_path]
 ```
 
 Пример:
 
 ```bash
 python main.py https://github.com/user/project.git
+```
+
+Пример для локального проекта (например, уже помещенного в `sandbox/`):
+
+```bash
+python main.py ./sandbox/project_name
+```
+
+Если запустить без аргументов, будет использован путь `./sandbox`:
+
+```bash
+python main.py
 ```
 
 Для выбора провайдера:
@@ -94,7 +106,7 @@ python main.py https://github.com/user/project.git --provider groq --model llama
 
 ## Как это работает
 
-1. `project_loader.py` клонирует репозиторий в папку `sandbox` (внутри нее создается временная директория проекта).
+1. `project_loader.py` либо клонирует репозиторий в папку `sandbox`, либо использует локальный путь.
 2. `agent.py` собирает список поддерживаемых файлов и запрашивает у LLM план анализа (`get_plan`).
 3. `agent.py` для каждого файла выполняет динамическую цепочку действий:
    - базовый анализ (`primary_analysis`);

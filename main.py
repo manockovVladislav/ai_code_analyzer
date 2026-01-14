@@ -22,7 +22,12 @@ def _load_agent_class():
 def main():
     """Парсит аргументы и запускает анализ репозитория."""
     parser = argparse.ArgumentParser(description="AI-Agent: анализ кода из Git-репозитория")
-    parser.add_argument("git_url", help="URL Git-репозитория для анализа")
+    parser.add_argument(
+        "source",
+        nargs="?",
+        default=None,
+        help="URL Git-репозитория или локальный путь (по умолчанию ./sandbox)",
+    )
     parser.add_argument(
         "-o",
         "--output",
@@ -49,7 +54,11 @@ def main():
     else:
         model = ModelAPI(model_name=args.model or "gpt-4")
     agent = Agent(model=model)
-    asyncio.run(agent.run_from_git(args.git_url, output_file=args.output))
+    source = args.source or "sandbox"
+    if source.startswith("http://") or source.startswith("https://"):
+        asyncio.run(agent.run_from_git(source, output_file=args.output))
+    else:
+        asyncio.run(agent.run_from_path(source, output_file=args.output))
 
 
 if __name__ == "__main__":
