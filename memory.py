@@ -24,7 +24,10 @@ class CodeMemory:
             return
         os.makedirs(self.persist_dir, exist_ok=True)
         self.client = chromadb.PersistentClient(path=self.persist_dir)
-        self.collection = self.client.create_collection(self.collection_name)
+        try:
+            self.collection = self.client.get_or_create_collection(self.collection_name)
+        except Exception:
+            self.collection = self.client.get_collection(self.collection_name)
         self.fallback_chunks = []
 
     def _fake_embed(self, text: str) -> list[float]:

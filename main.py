@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 
 from model_api import ModelAPI
+from local_model_api import LocalModelAPI
 from gigachat_api import GigaChatAPI
 from groq_api import GroqAPI
 
@@ -36,9 +37,9 @@ def main():
     )
     parser.add_argument(
         "--provider",
-        choices=["openai", "gigachat", "groq"],
-        default="openai",
-        help="Провайдер LLM (openai или gigachat)",
+        choices=["openai", "gigachat", "groq", "local"],
+        default="local",
+        help="Провайдер LLM (openai, gigachat, groq, local)",
     )
     parser.add_argument(
         "--model",
@@ -51,6 +52,8 @@ def main():
         model = GigaChatAPI(model_name=args.model or "GigaChat")
     elif args.provider == "groq":
         model = GroqAPI(model_name=args.model or "llama-3.1-8b-instant")
+    elif args.provider == "local":
+        model = LocalModelAPI(model_path=args.model)
     else:
         model = ModelAPI(model_name=args.model or "gpt-4")
     agent = Agent(model=model)
