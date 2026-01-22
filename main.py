@@ -1,12 +1,10 @@
 import argparse
-import asyncio
 import importlib.util
 from pathlib import Path
 
-from model_api import ModelAPI
-from local_model_api import LocalModelAPI
 from gigachat_api import GigaChatAPI
-from groq_api import GroqAPI
+from koboldcpp_api import KoboldCppAPI
+from local_model_api import LocalModelAPI
 
 
 def _load_agent_class():
@@ -37,9 +35,9 @@ def main():
     )
     parser.add_argument(
         "--provider",
-        choices=["openai", "gigachat", "groq", "local"],
-        default="local",
-        help="Провайдер LLM (openai, gigachat, groq, local)",
+        choices=["gigachat", "local", "kobold"],
+        default="kobold",
+        help="Провайдер LLM (gigachat, local, kobold)",
     )
     parser.add_argument(
         "--model",
@@ -50,18 +48,16 @@ def main():
     Agent = _load_agent_class()
     if args.provider == "gigachat":
         model = GigaChatAPI(model_name=args.model or "GigaChat")
-    elif args.provider == "groq":
-        model = GroqAPI(model_name=args.model or "llama-3.1-8b-instant")
-    elif args.provider == "local":
-        model = LocalModelAPI(model_path=args.model)
+    elif args.provider == "kobold":
+        model = KoboldCppAPI(model_name=args.model or "phi")
     else:
-        model = ModelAPI(model_name=args.model or "gpt-4")
+        model = LocalModelAPI(model_path=args.model)
     agent = Agent(model=model)
     source = args.source or "sandbox"
     if source.startswith("http://") or source.startswith("https://"):
-        asyncio.run(agent.run_from_git(source, output_file=args.output))
+        agent.run_from_git(source, output_file=args.output)
     else:
-        asyncio.run(agent.run_from_path(source, output_file=args.output))
+        agent.run_from_path(source, output_file=args.output)
 
 
 if __name__ == "__main__":

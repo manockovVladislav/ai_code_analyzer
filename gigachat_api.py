@@ -29,10 +29,10 @@ class GigaChatAPI(AnalysisAPIBase):
             model_name=self.model_name, api_key=self.api_token, base_url=self.base_url
         )
 
-    async def call_model(self, messages: list[dict]) -> str:
+    def call_model_raw(self, messages: list[dict]) -> str:
         """Отправляет сообщения в GigaChat и возвращает текст ответа."""
         try:
-            response = await self.llm.ainvoke(to_langchain_messages(messages))
+            response = self.llm.invoke(to_langchain_messages(messages))
         except Exception as e:
             return f"ERROR: Ошибка запроса к GigaChat - {e}"
         try:

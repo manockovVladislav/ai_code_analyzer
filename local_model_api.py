@@ -1,4 +1,3 @@
-import asyncio
 import os
 
 try:
@@ -27,9 +26,9 @@ class LocalModelAPI(AnalysisAPIBase):
             )
 
         def pick_device() -> str:
-            if not torch.cuda.is_available():
-                raise RuntimeError("CUDA недоступна. Требуется видеокарта для локальной модели.")
-            return "cuda"
+            if torch.cuda.is_available():
+                return "cuda"
+            return "cpu"
 
         resolved_path = model_path or os.getenv(
             "LOCAL_MODEL_PATH", "/home/vladislav/models/Phi-3.5-mini-instruct"
@@ -43,26 +42,42 @@ class LocalModelAPI(AnalysisAPIBase):
         device = pick_device()
         self.device = torch.device(device)
         print(f"LocalModelAPI device: {self.device}")
-        dtype = torch.float16
-        device_map = {"": "cuda:0"}
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=dtype,
-        )
+        lowered_path = self.model_path.lower()
+        is_qwen3 = "qwen" in lowered_path or "qwen3" in lowered_path
+        self.is_qwen3 = is_qwen3
+        if device == "cuda" and is_qwen3 and torch.cuda.is_bf16_supported():
+            dtype = torch.bfloat16
+        elif device == "cuda":
+            dtype = torch.float16
+        else:
+            dtype = torch.float32
+        if device == "cuda":
+            device_map = {"": "cuda:0"}
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=dtype,
+            )
+        else:
+            device_map = None
+            bnb_config = None
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_path,
-            torch_dtype=dtype,
-            device_map=device_map,
-            quantization_config=bnb_config,
-            trust_remote_code=True,
-            attn_implementation="eager",
-        )
+        model_kwargs = {
+            "torch_dtype": dtype,
+            "device_map": device_map,
+            "trust_remote_code": True,
+            "attn_implementation": "eager",
+        }
+        if bnb_config is not None:
+            model_kwargs["quantization_config"] = bnb_config
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_path, **model_kwargs)
         self.model.to(self.device)
         self.model.eval()
+        if self.tokenizer.pad_token_id is None and self.tokenizer.eos_token_id is not None:
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
         print("first param device:", next(self.model.parameters()).device)
-        print("cuda mem (GB):", torch.cuda.memory_allocated() / 1024**3)
+        if self.device.type == "cuda":
+            print("cuda mem (GB):", torch.cuda.memory_allocated() / 1024**3)
 
     def _build_prompt(self, messages: list[dict]) -> str:
         """Формирует промпт в формате chat-template или в fallback-формате."""
@@ -85,6 +100,10 @@ class LocalModelAPI(AnalysisAPIBase):
         inputs = self.tokenizer(prompt, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         gen_kwargs = {"max_new_tokens": self.max_new_tokens}
+        if self.tokenizer.eos_token_id is not None:
+            gen_kwargs["eos_token_id"] = self.tokenizer.eos_token_id
+        if self.tokenizer.pad_token_id is not None:
+            gen_kwargs["pad_token_id"] = self.tokenizer.pad_token_id
         if self.temperature > 0:
             gen_kwargs.update({"do_sample": True, "temperature": self.temperature})
         else:
@@ -93,9 +112,9 @@ class LocalModelAPI(AnalysisAPIBase):
         new_tokens = output_ids[0][inputs["input_ids"].shape[-1] :]
         return self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
-    async def call_model(self, messages: list[dict]) -> str:
+    def call_model_raw(self, messages: list[dict]) -> str:
         """Отправляет сообщения в локальную модель и возвращает ответ."""
         try:
-            return await asyncio.to_thread(self._generate, messages)
+            return self._generate(messages)
         except Exception as e:
             return f"ERROR: Ошибка локальной модели - {e}"
