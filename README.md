@@ -101,6 +101,12 @@ python main.py
 python main.py https://github.com/user/project.git --provider gigachat --model GigaChat
 ```
 
+Для включения песочницы во время анализа:
+
+```bash
+python main.py https://github.com/user/project.git --agent_sandbox
+```
+
 Для локальной модели:
 
 ```bash

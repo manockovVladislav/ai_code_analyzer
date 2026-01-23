@@ -2,16 +2,31 @@ import os
 import re
 
 from memory import CodeMemory
+from sandbox_runner import AgentSandbox
 
 
 class AnalysisAPIBase:
     """Базовая логика анализа: промпты, язык, чанки и память."""
 
-    def __init__(self, model_name: str, prompt_dir: str | None = None, memory=None):
+    def __init__(
+        self,
+        model_name: str,
+        prompt_dir: str | None = None,
+        memory=None,
+        use_sandbox: bool = False,
+    ):
         """Инициализирует базовую часть анализа и память."""
         self.model_name = model_name
         self.prompt_dir = prompt_dir or os.path.join(os.path.dirname(__file__), "prompts")
         self.memory = memory or CodeMemory()
+        self.use_sandbox = use_sandbox
+        self.sandbox = AgentSandbox() if use_sandbox else None
+
+    def set_use_sandbox(self, enabled: bool) -> None:
+        """Включает или выключает песочницу для экспериментов."""
+        self.use_sandbox = enabled
+        if enabled and self.sandbox is None:
+            self.sandbox = AgentSandbox()
 
     def detect_language(self, file_path: str) -> str:
         """Определяет язык по расширению файла."""
@@ -125,6 +140,31 @@ class AnalysisAPIBase:
         """Отправляет сообщения в модель и возвращает текст ответа."""
         return self.call_model_raw(messages)
 
+    def _maybe_run_sandbox(self, text: str) -> str:
+        """Ищет sandbox-блок и выполняет его, если включена песочница."""
+        if not self.use_sandbox or self.sandbox is None or not text:
+            return text
+        match = re.search(r"```sandbox\s*(.*?)```", text, flags=re.S)
+        if not match:
+            match = re.search(r"\[SANDBOX\](.*?)\[/SANDBOX\]", text, flags=re.S)
+        if not match:
+            return text
+        code = match.group(1).strip()
+        if not code:
+            return text
+        result = self.sandbox.run(code)
+        output = result.get("output", "")
+        if len(output) > 4000:
+            output = output[:4000] + "\n... (truncated)"
+        sandbox_block = (
+            "\n\n[Sandbox output]\n"
+            f"exit_code: {result.get('exit_code')}\n"
+            f"log_path: {result.get('log_path')}\n"
+            "output:\n"
+            f"{output}\n"
+        )
+        return text + sandbox_block
+
     def get_plan(self, file_list: list[str]) -> str:
         """Строит план анализа на основе списка файлов."""
         system_prompt = self._get_named_prompt(
@@ -181,6 +221,11 @@ class AnalysisAPIBase:
         """Анализирует код файла с учетом языка, блоков и промежуточных выводов."""
         lang = self.detect_language(file_path)
         system_prompt = self._get_language_prompt(lang)
+        if self.use_sandbox:
+            system_prompt += (
+                "\n\nЕсли нужно проверить гипотезу, вставь код в блоке "
+                "```sandbox ...``` или [SANDBOX]...[/SANDBOX]."
+            )
         chunks = self._chunk_code(code)
         self.memory.store_chunks(file_path, lang, chunks, kind="code")
         fence_lang = self._get_code_fence_lang(lang)
@@ -224,6 +269,7 @@ class AnalysisAPIBase:
                 {"role": "user", "content": user_prompt},
             ]
             result = self.call_model(messages)
+            result = self._maybe_run_sandbox(result)
             block_results.append(result)
             self.memory.store_summary(
                 scope=f"{file_path}:{idx}",

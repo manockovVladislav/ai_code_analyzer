@@ -8,7 +8,7 @@ from local_model_api import LocalModelAPI
 
 
 def _load_agent_class():
-    """Загружает Agent из agent.py, обходя конфликт с пакетом agent/."""
+    """Загружает Agent из agent.py"""
     agent_path = Path(__file__).with_name("agent.py")
     spec = importlib.util.spec_from_file_location("agent_module", agent_path)
     if spec is None or spec.loader is None:
@@ -44,6 +44,11 @@ def main():
         default=None,
         help="Имя модели провайдера (например, gpt-4 или GigaChat)",
     )
+    parser.add_argument(
+        "--agent_sandbox",
+        action="store_true",
+        help="Разрешить песочницу для экспериментов во время анализа",
+    )
     args = parser.parse_args()
     Agent = _load_agent_class()
     if args.provider == "gigachat":
@@ -52,6 +57,7 @@ def main():
         model = KoboldCppAPI(model_name=args.model or "phi")
     else:
         model = LocalModelAPI(model_path=args.model)
+    model.set_use_sandbox(args.agent_sandbox)
     agent = Agent(model=model)
     source = args.source or "sandbox"
     if source.startswith("http://") or source.startswith("https://"):

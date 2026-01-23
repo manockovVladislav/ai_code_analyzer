@@ -7,7 +7,7 @@ except ImportError:
 
 
 def _normalize_base_url(base_url: str | None) -> str | None:
-    """Strip OpenAI chat-completions suffix for LangChain base_url."""
+    """Убирает суффикс chat-completions у base_url для LangChain."""
     if not base_url:
         return None
     suffix = "/chat/completions"
@@ -17,12 +17,12 @@ def _normalize_base_url(base_url: str | None) -> str | None:
 
 
 def build_chat_model(model_name: str, api_key: str, base_url: str | None) -> "ChatOpenAI":
-    """Create a LangChain chat model with OpenAI-compatible settings."""
+    """Создает LangChain chat-модель с OpenAI-совместимыми настройками."""
     if ChatOpenAI is None:
         raise RuntimeError(
             "LangChain is not installed. Install langchain-openai and langchain-core."
         )
-    # Keep defaults explicit to make provider overrides predictable.
+    # Явно задаем дефолты, чтобы переопределения провайдера были предсказуемы.
     return ChatOpenAI(
         model=model_name,
         api_key=api_key,
